@@ -1,0 +1,10 @@
+{
+  "short_name": "QuietCheckIn",
+  "name": "Quiet Check-In — Calm Elder Caretaking",
+  "description": "Privacy-first ambient routine intelligence for elder care using Ring event metadata.",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#279866",
+  "background_color": "#ffffff",
+  "icons": []
+}
