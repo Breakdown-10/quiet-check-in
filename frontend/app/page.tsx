@@ -1422,7 +1422,7 @@ export default function DashboardPage() {
               </div>
               <div>
                 <h3 className="text-sm font-bold font-display text-primary">Family Care Assistant</h3>
-                <p className="text-[10px] text-secondary">Powered by Bedrock Claude Haiku 5.5 + Strands Tools</p>
+                <p className="text-[10px] text-secondary">Powered by Bedrock Claude Haiku + Strands Tools</p>
               </div>
             </div>
             <button
@@ -1474,7 +1474,7 @@ export default function DashboardPage() {
                         ? 'bg-blue-100 text-blue-700'
                         : 'bg-slate-200 text-slate-600'
                     }`}>
-                      {m.source === 'bedrock' ? '⚡ Bedrock Claude Haiku 5.5' : '🛡️ Safety Engine'}
+                      {m.source === 'bedrock' ? '⚡ Bedrock Claude Haiku' : '🛡️ Safety Engine'}
                     </span>
                   </div>
                 )}

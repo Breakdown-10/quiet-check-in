@@ -57,10 +57,11 @@ class BedrockNarratorAgent:
         """Return prioritized list of Bedrock model IDs / inference profiles."""
         candidates = [self.model_id]
         fallback_candidates = [
-            "anthropic.claude-3-5-sonnet-20241022-v2:0",
-            "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
-            "us.anthropic.claude-3-5-haiku-20241022-v1:0",
-            "anthropic.claude-3-haiku-20240307-v1:0",
+            "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+            "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+            "us.anthropic.claude-haiku-5-5",
+            "global.anthropic.claude-haiku-5-5",
+            "anthropic.claude-haiku-5-5"
         ]
         for m in fallback_candidates:
             if m not in candidates:

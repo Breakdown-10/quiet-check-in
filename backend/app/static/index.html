@@ -370,7 +370,7 @@
                 </div>
                 <div>
                     <h3 class="text-sm font-bold text-slate-900">AI Family Assistant</h3>
-                    <p class="text-[10px] text-slate-500">Bedrock Claude Haiku 5.5 + Strands Tools</p>
+                    <p class="text-[10px] text-slate-500">Bedrock Claude Haiku + Strands Tools</p>
                 </div>
             </div>
             <button onclick="toggleChat()" class="text-slate-400 hover:text-slate-600">
@@ -748,7 +748,7 @@
                 });
                 const data = await res.json();
                 const sourceBadge = data.source === 'bedrock'
-                    ? '<span class="inline-block mt-1.5 text-[10px] text-calm-700 font-semibold bg-calm-100 px-2 py-0.5 rounded-full">⚡ Bedrock Claude Haiku 5.5</span>'
+                    ? '<span class="inline-block mt-1.5 text-[10px] text-calm-700 font-semibold bg-calm-100 px-2 py-0.5 rounded-full">⚡ Bedrock Claude Haiku</span>'
                     : '<span class="inline-block mt-1.5 text-[10px] text-slate-500 font-medium bg-slate-200 px-2 py-0.5 rounded-full">🛡️ Grounded Safety Engine</span>';
                 chatMessages.innerHTML += `
                     <div class="bg-slate-100 p-3 rounded-2xl rounded-tl-sm text-slate-800 text-xs">

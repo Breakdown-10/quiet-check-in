@@ -13,7 +13,7 @@ class Settings(BaseModel):
     DEMO_CIRCLE_ID: str = "circle_frank_phoenix"
     DEFAULT_TIMEZONE_OFFSET: float = -7.0  # Phoenix (UTC-7, no DST)
     AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
-    BEDROCK_MODEL_ID: str = os.getenv("BEDROCK_MODEL_ID", "us.anthropic.claude-3-5-sonnet-20241022-v2:0")
+    BEDROCK_MODEL_ID: str = os.getenv("BEDROCK_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
     AWS_ACCESS_KEY_ID: Optional[str] = os.getenv("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY: Optional[str] = os.getenv("AWS_SECRET_ACCESS_KEY")
     AWS_SESSION_TOKEN: Optional[str] = os.getenv("AWS_SESSION_TOKEN")
