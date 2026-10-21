@@ -97,6 +97,7 @@ Resources:
         AllowHeaders:
           - Content-Type
           - Authorization
+          - X-Signature
           - X-Ring-Signature
           - X-Amz-Date
         AllowOrigins:

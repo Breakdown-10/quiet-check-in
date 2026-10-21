@@ -18,6 +18,7 @@ class AlertStatus(str, Enum):
     ACTIVE = "active"
     ACKNOWLEDGED_SAFE = "acknowledged_safe"      # "I called, all good"
     ACKNOWLEDGED_ESCALATE = "acknowledged_escalate" # "Can't reach him"
+    AUTO_RESOLVED = "auto_resolved"              # "Routine resumed (activity detected)"
     EXPIRED = "expired"
 
 

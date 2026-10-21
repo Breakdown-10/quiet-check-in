@@ -143,3 +143,37 @@ def test_quiet_hours_suppression(manager_and_clock, missed_anchor_observation):
     )
     assert high_alert is not None
     assert high_alert.level == EscalationLevel.L3_FAMILY_ACTION
+
+
+def test_auto_resolve_alert_when_routine_resumes(manager_and_clock, missed_anchor_observation):
+    """Verify that incoming fresh ambient activity automatically resolves an active alert."""
+    manager, clock = manager_and_clock
+    circle = {"circle_id": "c1", "offset_hours": -7.0}
+
+    alert = manager.determine_escalation(
+        observation=missed_anchor_observation,
+        circle=circle,
+        existing_alerts=[]
+    )
+    assert alert.status == AlertStatus.ACTIVE
+
+    from backend.app.db.repositories import repo
+    from backend.app.engine.models import Signal, SignalKind
+    repo.clear()
+    repo.store_alert(alert)
+
+    resumption_signal = Signal(
+        circle_id="c1",
+        device_id="sensor_patio",
+        kind=SignalKind.DOOR_CLOSED,
+        sub_type="door_closed",
+        ts_utc=clock.now(),
+        local_minutes=600,
+        request_id="resump-1"
+    )
+
+    resolved = repo.auto_resolve_active_alerts("c1", resumption_signal)
+    assert len(resolved) == 1
+    assert resolved[0].status == AlertStatus.AUTO_RESOLVED
+    assert "activity detected on sensor_patio" in resolved[0].feedback
+

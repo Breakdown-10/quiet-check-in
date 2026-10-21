@@ -4,11 +4,15 @@
 > *Submission for Build, Ship, Shape: Amazon Developer Hackathon (2026)*  
 > **Track:** Ring App Developer Primary Track | **Mini-Challenges:** AWS Builder + Open Source (`ring-partner-kit`)
 
-[![Tests: 43 Passed](https://img.shields.io/badge/tests-43%20passed-brightgreen.svg)](tests/)
+[![Judge Quickstart](https://img.shields.io/badge/Judge-Quickstart%20Guide-blueviolet.svg)](JUDGE_QUICKSTART.md)
+[![Tests: 47 Passed](https://img.shields.io/badge/tests-47%20passed-brightgreen.svg)](tests/)
 [![Eval: 100% Recall](https://img.shields.io/badge/eval%20recall-100%25-brightgreen.svg)](eval/)
-[![False Alarms: 0.0/mo](https://img.shields.io/badge/false%20alarms-0.0%2Fmo-brightgreen.svg)](eval/)
+[![Precision: 94.7%](https://img.shields.io/badge/precision-94.7%25-brightgreen.svg)](eval/)
+[![False Alarms: 0.17/mo](https://img.shields.io/badge/false%20alarms-0.17%2Fmo-brightgreen.svg)](eval/)
 [![AWS: SAM & Bedrock](https://img.shields.io/badge/AWS-SAM%20%7C%20Bedrock%20Claude-orange.svg)](template.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+> 🚀 **Judging Quiet Check-In?** Start with our 1-page [**`JUDGE_QUICKSTART.md`**](JUDGE_QUICKSTART.md) for 3 commands to run, 5 clicks to demo, and our Real vs. Simulated reality table.
 
 ---
 
@@ -21,7 +25,7 @@ Elder monitoring systems face an unavoidable dilemma:
 **Quiet Check-In** takes a completely different path:
 We monitor **routine rhythm through ambient Ring device metadata alone**—timestamps and device labels from standard doorbells, contact sensors, and motion detectors.
 
-- 🚫 **Zero Video Streams**
+- 🚫 **Zero Video Streams (WHEP)**
 - 🚫 **Zero Audio Recording**
 - 🚫 **Zero Still Snapshots**
 - 🚫 **Zero Wearables to Remember**
@@ -57,7 +61,7 @@ flowchart TD
         
         Fallback --> SES["Amazon SES\n(One-Tap Action Email)"]
         
-        API <--> Assistant["Strands AI Family Assistant\n(Tool-Assisted Status Q&A)"]
+        API <--> Assistant["AI Family Assistant\n(Agentic Tool-Assisted Q&A)"]
         Assistant <--> DDB
     end
 
@@ -73,37 +77,38 @@ flowchart TD
 
 ### 1. Robust Webhook Ingestion & Cryptographic Verification
 - Real-time ingestion of Ring Developer API v1.1 Webhook envelopes.
-- Constant-time HMAC-SHA256 signature verification over unparsed raw request bytes (`X-Ring-Signature`).
+- Constant-time HMAC-SHA256 signature verification over unparsed raw request bytes (`X-Signature` with `X-Ring-Signature` fallback).
 - Timestamp drift tolerance check (300s window) mitigating replay attacks.
 - Exact deduplication via `meta.request_id` with 48-hour automated DynamoDB TTL.
 
 ### 2. Statistical Routine Intelligence (KDE + MAD)
 - Discovers personalized daily anchors (morning wake, medicine cabinet, lunch, evening activity) using **Gaussian Kernel Density Estimation (KDE)**.
 - Computes dynamic tolerance bounds via **Median Absolute Deviation (MAD)**:
-  $$\text{Window} = \text{Median} \pm \max(45\text{m},\ 2.5 \times 1.4826 \times \text{MAD}) + 30\text{m grace}$$
+  $$\text{Window} = \text{Median} \pm \max(30\text{m},\ 2.5 \times 1.4826 \times \text{MAD}) + 30\text{m grace}$$
 - Requires $\ge 60\%$ historical support before promoting a recurring cluster into an enforced anchor.
 - Handles waking silence ($\ge 8$ daytime hours) while strictly excluding scheduled sleep hours (10:00 PM – 7:00 AM).
 - Evaluates device battery and connection health, automatically suppressing false alarms if sensors go offline or Elder Away Mode is active.
 
 ### 3. Deterministic Escalation State Machine
-* **L0 (Normal):** Everything is within normal routine tolerances. Green status.
-* **L1 (Gentle In-App Check):** 30 minutes past grace window. Logged in dashboard; quiet.
-* **L2 (Direct Family Notification):** 60 minutes past grace window. Amazon SES email dispatched to primary caregiver with one-tap acknowledgment links.
-* **L3 (Circle Escalation):** 120 minutes without acknowledgment. Reaches secondary circle members.
-* **Night Silence:** Automatic quiet hours suppression between 10:00 PM and 7:00 AM.
+* **L0 (Normal Routine / Grace):** Routine is within statistical bounds or within early grace. In-app dashboard status only.
+* **L1 (Primary Caregiver Nudge):** 30 minutes past grace window. Amazon SES email dispatched to primary caregiver (Maya) citing baseline facts with one-tap acknowledgment links.
+* **L2 (Secondary Circle / Neighbor):** 45 minutes of silence without acknowledgment. Reaches secondary circle member (neighbor Sam) for a look-in.
+* **L3 (Circle Action):** 60 additional minutes without acknowledgment, or prolonged daytime silence (8+ daytime hours). Prompts direct in-person check.
+* **Night Silence:** Automatic quiet hours suppression between 10:00 PM and 7:00 AM for non-critical alerts.
 * **Caregiver Feedback Loops:**
-  - *"Mom is fine (slept in)":* Automatically widens the anchor tolerance window by +15 minutes for the next 7 days.
-  - *"Can't reach Mom":* Immediately promotes alert to L3 and triggers circle broadcast.
+  - *"I called Frank, all is well":* Mutes alert and automatically widens the anchor tolerance window by +15 minutes for 7 days.
+  - *"Can't reach him":* Immediately promotes alert to L2/L3 for immediate circle check.
+  - *Activity Resumption:* Fresh sensor events automatically resolve active alerts, marking "Routine Resumed".
 
-### 4. AI Narrator & Family Chat (Amazon Bedrock + Strands)
+### 4. AI Narrator & Family Chat (Amazon Bedrock)
 - **Bedrock Claude 3.5 Sonnet:** Powered by the Amazon Bedrock Converse API with tool-use capabilities (`toolConfig`).
 - **Amazon Bedrock Guardrails:** Enforces regulatory and safety guardrails, filtering out medical diagnoses, panic words, and emergency claims ("stroke", "heart attack", "call 911").
-- **Strands Agent Tools:** Conversational AI can inspect today's status, recent device signals, and explain why an anchor was formed.
+- **Agentic Status Tools:** Conversational AI inspects today's status, recent device signals, and explains why an anchor was formed.
 - **Guaranteed Template Fallback:** If Bedrock is throttled or unreachable, a deterministic template narrator formats all alerts without interruption.
 
 ### 5. Open Source Mini-Challenge: `ring-partner-kit`
 We packaged our reusable developer toolkit into an open-source, MIT-licensed Python package located in [`ring-partner-kit/`](ring-partner-kit/):
-- **`RingWebhookVerifier`:** Production-grade constant-time HMAC-SHA256 verifier with timestamp drift validation.
+- **`RingWebhookVerifier`:** Timing-safe HMAC-SHA256 verifier with timestamp drift validation.
 - **Pydantic v2 Models:** Strict schemas for Ring v1.1 Webhooks, device metadata, and normalized signals.
 - **`RingApiClient`:** OAuth2 PKCE token lifecycle manager with exponential backoff retry and rate limit tracking.
 - **`RingTwinSimulator`:** Standalone hardware simulator with CLI (`ring-twin`) and Gaussian schedule generation for local/CI testing.
@@ -112,24 +117,32 @@ We packaged our reusable developer toolkit into an open-source, MIT-licensed Pyt
 
 ## 📊 Evaluation Harness & Empirical Results
 
-We benchmarked Quiet Check-In using our automated 30-day simulator across 5 diverse elder routine personas (early riser, medication-strict, afternoon wanderer, nocturnal reading routine, and irregular schedule):
+We benchmarked Quiet Check-In using our automated simulator across 6 diverse elder routine personas over 180 person-days (including early risers, medication-strict, late sleepers, and benign holiday sleep-ins).
+
+> **Note on Evaluation Methodology:** Synthetic data benchmark generated via our Ring Twin simulator to validate statistical bounds and state machine logic under controlled conditions; not clinical validation.
 
 ```text
 ====================================================================
         QUIET CHECK-IN: ROUTINE INTELLIGENCE EVALUATION REPORT
+  [SYNTHETIC BENCHMARK - SIMULATED PERSONAS, NOT CLINICAL VALIDATION]
 ====================================================================
- Personas Simulated           : 5 distinct elder routines
- Total Days Evaluated         : 150 person-days
- Injected Routine Breaks      : 15 true anomalies
+ Personas Simulated           : 6 distinct elder routines
+ Total Days Evaluated         : 180 person-days
+ Injected Routine Breaks      : 18 true anomalies
 --------------------------------------------------------------------
- True Positives (Detected)    : 15
- False Positives (Spurious)   : 0
+ True Positives (Detected)    : 18
+ False Positives (Spurious)   : 1
  False Negatives (Missed)     : 0
 --------------------------------------------------------------------
  Detection Recall (Target >=90%): 100.0%  [PASS]
- Detection Precision          : 100.0%
- False Alerts per Person-Month: 0.0 (Target < 1.0)  [PASS]
+ Detection Precision          : 94.7%
+ False Alerts per Person-Month: 0.17 (Target < 1.0)  [PASS]
  Mean Detection Latency       : 10.0 minutes past grace window
+--------------------------------------------------------------------
+ Grace Window Sensitivity & Trade-off Analysis:
+   * Grace 15m : Recall 100.0% | False Alarms 0.83/mo | Latency  5.0m
+   * Grace 30m : Recall 100.0% | False Alarms 0.17/mo | Latency 10.0m [DEFAULT]
+   * Grace 45m : Recall  94.4% | False Alarms 0.00/mo | Latency 15.0m
 ====================================================================
 ```
 
@@ -140,7 +153,7 @@ We benchmarked Quiet Check-In using our automated 30-day simulator across 5 dive
 ### Prerequisites
 - Python 3.10+ (tested on Python 3.12)
 - Node.js 18+ (optional, for frontend development)
-- AWS CLI & SAM CLI (for AWS deployment)
+- AWS CLI & SAM CLI (optional, for AWS deployment)
 
 ### 1. Installation
 Clone the repository and install dependencies:
@@ -151,13 +164,13 @@ pip install -e ring-partner-kit
 ```
 
 ### 2. Run Tests
-Execute the full test suite (43 unit and integration tests):
+Execute the full automated test suite (47 unit and integration tests):
 ```bash
-python -m pytest tests/ ring-partner-kit/tests/ -v
+python -m pytest
 ```
 
 ### 3. Run Evaluation Harness
-Run the statistical routine intelligence benchmark across 150 person-days:
+Run the statistical routine intelligence benchmark across 180 person-days:
 ```bash
 python -m eval.harness
 ```
@@ -175,20 +188,21 @@ Open **[http://localhost:8000/](http://localhost:8000/)** in your browser.
 
 The Family Dashboard served at `http://localhost:8000/` contains a live **Time-Travel Console** at the bottom dock:
 
-1. **Normal Morning (08:30 AM):** Click `Normal Morning (08:30)`. Observe the Morning Wake and Medicine Cabinet anchors marked as completed. The status card shows **All Quiet & Well (L0)**.
-2. **Morning Routine Missed (10:30 AM):** Click `Morning Missed (10:30)`. The clock advances past the morning grace window without detected motion. Watch the status transition to **Routine Drift Detected (L1/L2)** with an alert card.
-3. **Acknowledge Alert:** Click **"Acknowledge — Mom is okay"** on the alert card. Notice the alert moves to acknowledged, and the system logs an automatic +15m window widening.
-4. **AI Assistant Drawer:** Open the chat drawer and ask:
-   - *"How is Mom doing today?"*
-   - *"Did she open the medicine cabinet this morning?"*
+1. **Normal Morning (08:50 AM):** Click `Normal Morning Routine (08:50 AM)`. Observe Frank's morning wake, patio walk, meds, and morning paper marked as completed. The status card shows **All Quiet & Well (L0)**.
+2. **Routine Missed (09:45 AM):** Click `Missed Morning Paper (09:45 AM, L1)`. Frank had coffee and meds, but missed picking up the paper. The clock advances past the grace window; the status card turns **Amber (L1 Alert)** citing baseline evidence.
+3. **Escalate to L2 (11:15 AM):** Click `Escalate to L2 (11:15 AM)`. Advances past 11:15 AM without acknowledgment; promotes the alert to **L2 (Secondary Circle / Neighbor)**.
+4. **Caregiver Feedback:** Click **"I called Frank, all is well"**. Alert marks resolved, and the system widens Frank's morning window by +15 minutes for the next 7 days.
+5. **AI Assistant Drawer:** Open the chat drawer (top right) and ask:
+   - *"Did Dad get his paper today?"*
    - *"Why did the system alert me?"*
-5. **Reset Time:** Click `Reset Live Time` to restore normal clock operation.
+   - *"When did he last open the back door?"*
+6. **Reset Schedule:** Click `Reset to 07:00 AM` to restore fresh morning schedule.
 
 ---
 
 ## ☁️ AWS Cloud Deployment (SAM)
 
-Deploy the entire serverless architecture to your AWS account in minutes:
+Quiet Check-In is designed for serverless cloud execution via AWS SAM:
 
 ```bash
 # Build the SAM application
@@ -209,10 +223,11 @@ Resources provisioned:
 
 ## 📑 Hackathon Deliverables & Documentation
 
-- [Quiet Check-In PRD](Quiet%20Check-In_PRD.md): Complete engineering product requirements document.
-- [Ring App Store Certification & Devpost Guide (`RING_CERTIFICATION.md`)](RING_CERTIFICATION.md): Production readiness, content policy compliance, and turn-key reviewer notes.
-- [Developer Friction Log (`FRICTION.md`)](FRICTION.md): Detailed log of technical friction points encountered with Ring API, staging setup, and webhooks.
-- [Product & Developer Feedback (`PRODUCT_FEEDBACK.md`)](PRODUCT_FEEDBACK.md): Comprehensive evaluation of Ring API, MCP Server, Bedrock Converse, Strands, and AWS SAM.
+- [**Judge Quickstart Guide (`JUDGE_QUICKSTART.md`)**](JUDGE_QUICKSTART.md): 3 commands, 5-click walkthrough, and Real vs. Simulated table.
+- [Quiet Check-In PRD (`Quiet Check-In_PRD.md`)](Quiet%20Check-In_PRD.md): Complete engineering product requirements document.
+- [Ring App Store Alignment Guide (`RING_CERTIFICATION.md`)](RING_CERTIFICATION.md): Guidelines alignment, reviewer instructions, and submission checklist.
+- [Developer Friction Log (`FRICTION.md`)](FRICTION.md): Technical friction points encountered with Ring API staging, webhooks, and event history.
+- [Product & Developer Feedback (`PRODUCT_FEEDBACK.md`)](PRODUCT_FEEDBACK.md): Comprehensive evaluation of Ring API, Bedrock Converse, and AWS SAM.
 - [Open Source Toolkit (`ring-partner-kit/`)](ring-partner-kit/): Standalone MIT-licensed developer SDK and hardware simulator.
 - [AWS SAM Template (`template.yaml`)](template.yaml): Production-ready Infrastructure as Code template.
 

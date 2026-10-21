@@ -3,17 +3,17 @@ Test suite for the Quiet Check-In routine intelligence evaluation harness.
 Asserts that statistical baselines achieve the required precision, recall, and false alarm targets.
 """
 import pytest
-from eval.harness import run_evaluation_harness
+from eval.harness import run_evaluation_harness, PERSONAS
 
 
 def test_evaluation_harness_performance_benchmarks():
     """
-    Simulates 5 distinct personas over a 14-day evaluation period
+    Simulates distinct elder personas over an evaluation period
     and asserts performance meets PRD benchmarks.
     """
     results = run_evaluation_harness(eval_days=14)
 
-    assert results.total_days_simulated == 5 * 14
+    assert results.total_days_simulated == len(PERSONAS) * 14
     assert results.injected_breaks > 0
     # PRD Target: Detection Recall >= 90%
     assert results.recall >= 0.90, f"Recall {results.recall} is below 90% benchmark"

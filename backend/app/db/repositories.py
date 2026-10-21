@@ -2,7 +2,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 from backend.app.engine.models import Signal
 from backend.app.engine.baseline import Anchor
-from backend.app.engine.escalation import Alert
+from backend.app.engine.escalation import Alert, AlertStatus
 
 
 class InMemoryRepository:
@@ -107,6 +107,21 @@ class InMemoryRepository:
 
     def get_alert(self, alert_id: str) -> Optional[Alert]:
         return next((a for a in self._alerts if a.alert_id == alert_id), None)
+
+    def auto_resolve_active_alerts(self, circle_id: str, resumption_signal: Signal) -> list[Alert]:
+        """
+        Auto-resolves active routine deviation alerts when fresh ambient activity arrives.
+        Closes the loop gracefully if the elder resumes activity or a neighbor visits.
+        """
+        resolved: list[Alert] = []
+        for a in self._alerts:
+            if a.circle_id == circle_id and a.status == AlertStatus.ACTIVE:
+                a.status = AlertStatus.AUTO_RESOLVED
+                a.acknowledged_by = "System (Activity Resumed)"
+                a.acknowledged_at_utc = resumption_signal.ts_utc
+                a.feedback = f"Routine resumed: activity detected on {resumption_signal.device_id}"
+                resolved.append(a)
+        return resolved
 
     # --- Circles & Devices ---
     def register_circle(

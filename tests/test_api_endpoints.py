@@ -147,3 +147,23 @@ def test_customization_profile_and_anchors():
     updated_anchor = next(a for a in res_base_after.json()["anchors"] if a["anchor_id"] == first_anchor_id)
     assert updated_anchor["name"] == "Eleanor's Morning Herbal Tea"
 
+
+def test_security_proof_endpoint():
+    """Verify the live cryptographic security proof endpoint passes all 4 checks."""
+    res = client.get("/sim/security-proof")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "success"
+    assert len(data["proofs"]) == 4
+
+    proof_ids = [p["id"] for p in data["proofs"]]
+    assert "valid_hmac" in proof_ids
+    assert "tamper_protection" in proof_ids
+    assert "replay_protection" in proof_ids
+    assert "idempotent_dedupe" in proof_ids
+
+    # All 4 security guarantees must pass
+    for proof in data["proofs"]:
+        assert proof["passed"] is True, f"Security check failed: {proof['name']}"
+
+

@@ -147,6 +147,7 @@ class RingTwinSimulator:
 
         headers = {
             "Content-Type": "application/json",
+            "X-Signature": sig_header,
             "X-Ring-Signature": sig_header,
             "User-Agent": "RingTwinSimulator/1.0",
         }

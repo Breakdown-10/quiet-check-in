@@ -104,3 +104,18 @@ def test_family_chat_endpoint_answers_routine_questions():
     )
     assert res_emergency.status_code == 200
     assert "not an emergency" in res_emergency.json()["reply"].lower() or "routine" in res_emergency.json()["reply"].lower()
+
+
+def test_narrator_tool_execution_and_sources():
+    # Test tool execution helper
+    status_res = narrator_agent._execute_tool(circle_id, "get_today_status", {})
+    assert "elder_name" in status_res
+    assert "overall_status" in status_res
+
+    signals_res = narrator_agent._execute_tool(circle_id, "get_recent_signals", {"hours": 12.0})
+    assert "signals" in signals_res
+
+    reply, source = narrator_agent.answer_family_question_with_source(circle_id, "When did he last open the back door?")
+    assert isinstance(reply, str)
+    assert len(reply) > 0
+    assert source in ["bedrock", "fallback"]

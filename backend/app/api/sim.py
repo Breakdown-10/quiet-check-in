@@ -118,8 +118,44 @@ def inject_scenario(req: InjectScenarioRequest):
             "anchors": [a.model_dump() for a in anchors]
         }
 
-    elif scenario == "morning_routine":
-        # Simulate Frank's complete morning rhythm across multiple Ring sensors
+    elif scenario in ("morning_routine", "complete_all"):
+        # Complete all 4 morning routines in natural chronological sequence
+        now_utc = global_clock.now()
+        local_now = now_utc + timedelta(hours=offset)
+        local_midnight = datetime(local_now.year, local_now.month, local_now.day, 0, 0, 0)
+        midnight_utc = (local_midnight - timedelta(hours=offset)).replace(tzinfo=timezone.utc)
+
+        # 07:10 AM: Kitchen motion (Breakfast & Wake)
+        t0 = midnight_utc + timedelta(hours=7, minutes=10)
+        raw_b0, _ = simulator.build_signed_webhook("motion_detected", "motion_kitchen", t0, sub_type="human")
+
+        # 07:35 AM: Back patio door open/close (Garden walk)
+        t1 = midnight_utc + timedelta(hours=7, minutes=35)
+        raw_b1, _ = simulator.build_signed_webhook("contact_sensor_faulted", "sensor_backdoor", t1)
+
+        # 08:15 AM: Medicine cabinet open/close (Prescription pills)
+        t_med = midnight_utc + timedelta(hours=8, minutes=15)
+        raw_b_med, _ = simulator.build_signed_webhook("contact_sensor_faulted", "sensor_medicine", t_med)
+
+        # 08:45 AM: Front doorbell motion (Morning paper pickup)
+        t2 = midnight_utc + timedelta(hours=8, minutes=45)
+        raw_b2, _ = simulator.build_signed_webhook("motion_detected", "doorbell_front", t2, sub_type="human")
+
+        for raw_b in [raw_b0, raw_b1, raw_b_med, raw_b2]:
+            payload = RingWebhookPayload.model_validate_json(raw_b.decode("utf-8"))
+            sig = normalize_ring_payload(payload, circle_id=circle_id, timezone_offset_hours=offset)
+            repo.store_signal(sig)
+
+        # Advance virtual clock to 08:50 AM to reflect all morning routines completed
+        target_local = datetime(local_now.year, local_now.month, local_now.day, 8, 50, 0)
+        target_utc = (target_local - timedelta(hours=offset)).replace(tzinfo=timezone.utc)
+        global_clock.set_time(target_utc)
+
+        return {"status": "morning_routine_emitted", "signals_added": 4, "new_local_time": "08:50 AM"}
+
+    elif scenario in ("skip_routine", "missed_paper", "skip_paper"):
+        # Realistic Missed Paper: Frank woke up, visited kitchen, walked patio, and took medicine.
+        # He ONLY missed the front door paper pickup!
         now_utc = global_clock.now()
         local_now = now_utc + timedelta(hours=offset)
         local_midnight = datetime(local_now.year, local_now.month, local_now.day, 0, 0, 0)
@@ -129,27 +165,69 @@ def inject_scenario(req: InjectScenarioRequest):
         t0 = midnight_utc + timedelta(hours=7, minutes=10)
         raw_b0, _ = simulator.build_signed_webhook("motion_detected", "motion_kitchen", t0, sub_type="human")
 
-        # 07:35 AM: Back patio door open/close
+        # 07:35 AM: Back patio door
         t1 = midnight_utc + timedelta(hours=7, minutes=35)
         raw_b1, _ = simulator.build_signed_webhook("contact_sensor_faulted", "sensor_backdoor", t1)
 
-        # 08:15 AM: Medicine cabinet open/close
+        # 08:15 AM: Medicine cabinet
         t_med = midnight_utc + timedelta(hours=8, minutes=15)
         raw_b_med, _ = simulator.build_signed_webhook("contact_sensor_faulted", "sensor_medicine", t_med)
+
+        # Note: Front doorbell motion (08:45 AM) is NOT emitted (paper is missed)
+        for raw_b in [raw_b0, raw_b1, raw_b_med]:
+            payload = RingWebhookPayload.model_validate_json(raw_b.decode("utf-8"))
+            sig = normalize_ring_payload(payload, circle_id=circle_id, timezone_offset_hours=offset)
+            repo.store_signal(sig)
+
+        # Fast forward virtual clock to 10:00 AM (past 08:45 AM paper window + 30m grace)
+        target_local = datetime(local_now.year, local_now.month, local_now.day, 10, 0, 0)
+        target_utc = (target_local - timedelta(hours=offset)).replace(tzinfo=timezone.utc)
+        global_clock.set_time(target_utc)
+
+        return {
+            "status": "missed_paper_injected",
+            "new_local_time": "10:00 AM",
+            "note": "Frank completed kitchen, patio, and medicine, but missed morning paper pickup. L1 gentle check-in alert triggered for paper."
+        }
+
+    elif scenario in ("missed_meds", "skip_meds"):
+        # Realistic Missed Medication: Frank woke up, walked patio, and got paper, but missed morning pills!
+        now_utc = global_clock.now()
+        local_now = now_utc + timedelta(hours=offset)
+        local_midnight = datetime(local_now.year, local_now.month, local_now.day, 0, 0, 0)
+        midnight_utc = (local_midnight - timedelta(hours=offset)).replace(tzinfo=timezone.utc)
+
+        # 07:10 AM: Kitchen motion
+        t0 = midnight_utc + timedelta(hours=7, minutes=10)
+        raw_b0, _ = simulator.build_signed_webhook("motion_detected", "motion_kitchen", t0, sub_type="human")
+
+        # 07:35 AM: Back patio door
+        t1 = midnight_utc + timedelta(hours=7, minutes=35)
+        raw_b1, _ = simulator.build_signed_webhook("contact_sensor_faulted", "sensor_backdoor", t1)
 
         # 08:45 AM: Front doorbell motion
         t2 = midnight_utc + timedelta(hours=8, minutes=45)
         raw_b2, _ = simulator.build_signed_webhook("motion_detected", "doorbell_front", t2, sub_type="human")
 
-        for raw_b in [raw_b0, raw_b1, raw_b_med, raw_b2]:
+        # Note: Medicine cabinet (08:15 AM) is NOT emitted
+        for raw_b in [raw_b0, raw_b1, raw_b2]:
             payload = RingWebhookPayload.model_validate_json(raw_b.decode("utf-8"))
             sig = normalize_ring_payload(payload, circle_id=circle_id, timezone_offset_hours=offset)
             repo.store_signal(sig)
 
-        return {"status": "morning_routine_emitted", "signals_added": 4}
+        # Fast forward virtual clock to 09:15 AM (past 08:15 AM medicine window + 30m grace)
+        target_local = datetime(local_now.year, local_now.month, local_now.day, 9, 15, 0)
+        target_utc = (target_local - timedelta(hours=offset)).replace(tzinfo=timezone.utc)
+        global_clock.set_time(target_utc)
 
-    elif scenario == "skip_routine":
-        # Fast forward virtual clock to 10:00 AM (past morning routines + 30m grace) without activity
+        return {
+            "status": "missed_meds_injected",
+            "new_local_time": "09:15 AM",
+            "note": "Frank woke up, walked patio, and picked up paper, but missed morning medication. L1 check-in alert triggered for medicine."
+        }
+
+    elif scenario in ("all_missed", "inactivity"):
+        # Complete Morning Inactivity: No sensors triggered at all (e.g. Frank did not get out of bed)
         now_utc = global_clock.now()
         local_now = now_utc + timedelta(hours=offset)
         target_local = datetime(local_now.year, local_now.month, local_now.day, 10, 0, 0)
@@ -157,15 +235,107 @@ def inject_scenario(req: InjectScenarioRequest):
         global_clock.set_time(target_utc)
 
         return {
-            "status": "fast_forwarded_past_deadline",
+            "status": "total_inactivity_injected",
             "new_local_time": "10:00 AM",
-            "note": "Morning routine deadlines passed without activity. Evaluator triggers gentle L1 check-in alert."
+            "note": "No activity recorded all morning. All routines overdue, triggering general inactivity alert."
         }
+
+    elif scenario == "step_kitchen":
+        # Step 1: Wake up & Kitchen (07:15 AM)
+        now_utc = global_clock.now()
+        local_now = now_utc + timedelta(hours=offset)
+        local_midnight = datetime(local_now.year, local_now.month, local_now.day, 0, 0, 0)
+        midnight_utc = (local_midnight - timedelta(hours=offset)).replace(tzinfo=timezone.utc)
+
+        t0 = midnight_utc + timedelta(hours=7, minutes=10)
+        raw_b0, _ = simulator.build_signed_webhook("motion_detected", "motion_kitchen", t0, sub_type="human")
+        payload = RingWebhookPayload.model_validate_json(raw_b0.decode("utf-8"))
+        sig = normalize_ring_payload(payload, circle_id=circle_id, timezone_offset_hours=offset)
+        repo.store_signal(sig)
+
+        target_local = datetime(local_now.year, local_now.month, local_now.day, 7, 15, 0)
+        target_utc = (target_local - timedelta(hours=offset)).replace(tzinfo=timezone.utc)
+        global_clock.set_time(target_utc)
+
+        return {"status": "step_kitchen_complete", "new_local_time": "07:15 AM"}
+
+    elif scenario == "step_patio":
+        # Step 2: Back patio walk (07:40 AM)
+        now_utc = global_clock.now()
+        local_now = now_utc + timedelta(hours=offset)
+        local_midnight = datetime(local_now.year, local_now.month, local_now.day, 0, 0, 0)
+        midnight_utc = (local_midnight - timedelta(hours=offset)).replace(tzinfo=timezone.utc)
+
+        t1 = midnight_utc + timedelta(hours=7, minutes=35)
+        raw_b1, _ = simulator.build_signed_webhook("contact_sensor_faulted", "sensor_backdoor", t1)
+        payload = RingWebhookPayload.model_validate_json(raw_b1.decode("utf-8"))
+        sig = normalize_ring_payload(payload, circle_id=circle_id, timezone_offset_hours=offset)
+        repo.store_signal(sig)
+
+        target_local = datetime(local_now.year, local_now.month, local_now.day, 7, 40, 0)
+        target_utc = (target_local - timedelta(hours=offset)).replace(tzinfo=timezone.utc)
+        global_clock.set_time(target_utc)
+
+        return {"status": "step_patio_complete", "new_local_time": "07:40 AM"}
+
+    elif scenario == "step_meds":
+        # Step 3: Medicine cabinet (08:20 AM)
+        now_utc = global_clock.now()
+        local_now = now_utc + timedelta(hours=offset)
+        local_midnight = datetime(local_now.year, local_now.month, local_now.day, 0, 0, 0)
+        midnight_utc = (local_midnight - timedelta(hours=offset)).replace(tzinfo=timezone.utc)
+
+        t_med = midnight_utc + timedelta(hours=8, minutes=15)
+        raw_b_med, _ = simulator.build_signed_webhook("contact_sensor_faulted", "sensor_medicine", t_med)
+        payload = RingWebhookPayload.model_validate_json(raw_b_med.decode("utf-8"))
+        sig = normalize_ring_payload(payload, circle_id=circle_id, timezone_offset_hours=offset)
+        repo.store_signal(sig)
+
+        target_local = datetime(local_now.year, local_now.month, local_now.day, 8, 20, 0)
+        target_utc = (target_local - timedelta(hours=offset)).replace(tzinfo=timezone.utc)
+        global_clock.set_time(target_utc)
+
+        return {"status": "step_meds_complete", "new_local_time": "08:20 AM"}
+
+    elif scenario == "step_paper":
+        # Step 4: Front Doorbell / Paper pickup (08:50 AM)
+        now_utc = global_clock.now()
+        local_now = now_utc + timedelta(hours=offset)
+        local_midnight = datetime(local_now.year, local_now.month, local_now.day, 0, 0, 0)
+        midnight_utc = (local_midnight - timedelta(hours=offset)).replace(tzinfo=timezone.utc)
+
+        t2 = midnight_utc + timedelta(hours=8, minutes=45)
+        raw_b2, _ = simulator.build_signed_webhook("motion_detected", "doorbell_front", t2, sub_type="human")
+        payload = RingWebhookPayload.model_validate_json(raw_b2.decode("utf-8"))
+        sig = normalize_ring_payload(payload, circle_id=circle_id, timezone_offset_hours=offset)
+        repo.store_signal(sig)
+
+        target_local = datetime(local_now.year, local_now.month, local_now.day, 8, 50, 0)
+        target_utc = (target_local - timedelta(hours=offset)).replace(tzinfo=timezone.utc)
+        global_clock.set_time(target_utc)
+
+        return {"status": "step_paper_complete", "new_local_time": "08:50 AM"}
 
     elif scenario == "escalate_l2":
         # Fast forward virtual clock to 11:15 AM (past deadline + 60m) to trigger L2 escalation
         now_utc = global_clock.now()
         local_now = now_utc + timedelta(hours=offset)
+        local_midnight = datetime(local_now.year, local_now.month, local_now.day, 0, 0, 0)
+        midnight_utc = (local_midnight - timedelta(hours=offset)).replace(tzinfo=timezone.utc)
+
+        # Ensure earlier morning routines (kitchen, patio, meds) are present so L2 is specifically for unacknowledged deviation
+        t0 = midnight_utc + timedelta(hours=7, minutes=10)
+        raw_b0, _ = simulator.build_signed_webhook("motion_detected", "motion_kitchen", t0, sub_type="human")
+        t1 = midnight_utc + timedelta(hours=7, minutes=35)
+        raw_b1, _ = simulator.build_signed_webhook("contact_sensor_faulted", "sensor_backdoor", t1)
+        t_med = midnight_utc + timedelta(hours=8, minutes=15)
+        raw_b_med, _ = simulator.build_signed_webhook("contact_sensor_faulted", "sensor_medicine", t_med)
+
+        for raw_b in [raw_b0, raw_b1, raw_b_med]:
+            payload = RingWebhookPayload.model_validate_json(raw_b.decode("utf-8"))
+            sig = normalize_ring_payload(payload, circle_id=circle_id, timezone_offset_hours=offset)
+            repo.store_signal(sig)
+
         target_local = datetime(local_now.year, local_now.month, local_now.day, 11, 15, 0)
         target_utc = (target_local - timedelta(hours=offset)).replace(tzinfo=timezone.utc)
         global_clock.set_time(target_utc)
@@ -173,7 +343,7 @@ def inject_scenario(req: InjectScenarioRequest):
         return {
             "status": "fast_forwarded_to_l2_escalation",
             "new_local_time": "11:15 AM",
-            "note": "60+ minutes past deadline without ack. Escalator triggers L2 caregiver dispatch."
+            "note": "60+ minutes past paper deadline without ack. Escalator triggers L2 caregiver dispatch."
         }
 
     elif scenario == "device_offline":
@@ -193,9 +363,9 @@ def inject_scenario(req: InjectScenarioRequest):
         repo.register_device(circle_id, "sensor_medicine", "Medicine Cabinet", "contact_sensor")
         repo.register_device(circle_id, "motion_kitchen", "Kitchen Motion Sensor", "motion_sensor")
 
-        # Set clock to 7:30 AM Phoenix time today
+        # Set clock to 7:00 AM Phoenix time today (before morning routines begin)
         today = datetime.now(timezone.utc).date()
-        target_local = datetime(today.year, today.month, today.day, 7, 30, 0)
+        target_local = datetime(today.year, today.month, today.day, 7, 0, 0)
         target_utc = (target_local - timedelta(hours=offset)).replace(tzinfo=timezone.utc)
         global_clock.set_time(target_utc)
 
@@ -220,7 +390,77 @@ def inject_scenario(req: InjectScenarioRequest):
         )
         repo.store_anchors(circle_id, anchors)
 
-        return {"status": "reset_complete", "virtual_local_time": "07:30 AM"}
-
+        return {"status": "reset_complete", "virtual_local_time": "07:00 AM"}
 
     return {"error": f"Unknown scenario: {scenario}"}
+
+
+@router.get("/security-proof")
+@router.post("/security-proof")
+def run_security_proof():
+    """
+    Executes live cryptographic and idempotency verification checks:
+    1. Timing-safe HMAC-SHA256 signature verification over raw bytes
+    2. Payload tamper detection and strict 401 rejection
+    3. Replay attack timestamp drift mitigation (>300 seconds)
+    4. Idempotent request_id deduplication
+    """
+    import time
+    from backend.app.core.verifier import verify_ring_signature, generate_ring_signature
+    from ring_partner_kit import RingWebhookVerifier
+
+    key = settings.RING_HMAC_KEY
+    raw_payload = b'{"meta":{"version":"1.1","request_id":"proof-001","timestamp":"2026-10-21T12:00:00Z"},"data":{"id":"d1","type":"events"}}'
+
+    # 1. Valid signature check
+    sig = generate_ring_signature(raw_payload, key)
+    valid_ok = verify_ring_signature(raw_payload, sig, key)
+
+    # 2. Tampered payload check
+    tampered_payload = raw_payload + b" "
+    tampered_rejected = not verify_ring_signature(tampered_payload, sig, key)
+
+    # 3. Replay attack check (>300s drift)
+    rpk_verifier = RingWebhookVerifier(secret=key, max_drift_seconds=300)
+    old_time_ms = int((time.time() - 3600) * 1000)
+    stale_header, _ = rpk_verifier.sign(raw_payload, timestamp=old_time_ms)
+    replay_rejected = not rpk_verifier.verify(raw_payload, stale_header)
+
+    # 4. Deduplication
+    test_req_id = f"proof-dedupe-{int(time.time()*1000)}"
+    first_seen = not repo.is_request_processed(test_req_id)
+    repo.mark_request_processed(test_req_id)
+    second_seen = repo.is_request_processed(test_req_id)
+    dedupe_ok = first_seen and second_seen
+
+    return {
+        "status": "success",
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "proofs": [
+            {
+                "id": "valid_hmac",
+                "name": "HMAC-SHA256 Signature Verification",
+                "passed": valid_ok,
+                "detail": "Verified timing-safe HMAC over unparsed raw wire bytes (X-Signature)."
+            },
+            {
+                "id": "tamper_protection",
+                "name": "Cryptographic Tamper Protection",
+                "passed": tampered_rejected,
+                "detail": "Single-byte payload alteration strictly rejected with cryptographic mismatch."
+            },
+            {
+                "id": "replay_protection",
+                "name": "Replay Attack Drift Tolerance",
+                "passed": replay_rejected,
+                "detail": "Stale event (>300 seconds drift) rejected to prevent recorded packet replay."
+            },
+            {
+                "id": "idempotent_dedupe",
+                "name": "Idempotent Event Deduplication",
+                "passed": dedupe_ok,
+                "detail": "Duplicate meta.request_id detected and discarded with zero duplicate state."
+            }
+        ]
+    }
+

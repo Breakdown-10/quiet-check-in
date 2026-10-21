@@ -20,8 +20,9 @@ def family_chat(circle_id: str, req: ChatRequest):
     if not circle:
         raise HTTPException(status_code=404, detail="Care circle not found")
 
-    reply = narrator_agent.answer_family_question(circle_id=circle_id, question=req.message)
+    reply, source = narrator_agent.answer_family_question_with_source(circle_id=circle_id, question=req.message)
     return {
         "circle_id": circle_id,
-        "reply": reply
+        "reply": reply,
+        "source": source
     }

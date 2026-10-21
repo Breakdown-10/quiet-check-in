@@ -18,7 +18,7 @@ async def handle_ring_webhook(request: Request, response: Response):
     """
     # 1. Read unparsed raw body bytes over the wire
     raw_body = await request.body()
-    signature_header = request.headers.get("X-Signature")
+    signature_header = request.headers.get("X-Signature") or request.headers.get("X-Ring-Signature")
 
     # 2. Verify HMAC-SHA256 signature using the shared secret
     if not verify_ring_signature(raw_body, signature_header, settings.RING_HMAC_KEY):
@@ -51,6 +51,11 @@ async def handle_ring_webhook(request: Request, response: Response):
 
     signal = normalize_ring_payload(payload, circle_id=circle_id, timezone_offset_hours=offset)
     repo.store_signal(signal)
+
+    # Auto-resolve any active alerts if ambient routine activity resumes
+    resolved_alerts = repo.auto_resolve_active_alerts(circle_id, signal)
+    if resolved_alerts:
+        logger.info(f"Auto-resolved {len(resolved_alerts)} active alert(s) upon signal from {signal.device_id}")
 
     logger.info(f"Ingested signal: kind={signal.kind}, device={signal.device_id}, req={request_id}")
     return {

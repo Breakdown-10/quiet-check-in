@@ -1,5 +1,5 @@
 """
-Diagnostic test script to verify AWS Bedrock and Amazon SES credentials.
+Quiet Check-In — Amazon Bedrock & SES Diagnostic Verification Tool
 Run: python scripts/test_aws.py
 """
 import sys
@@ -12,53 +12,82 @@ from backend.app.config import settings
 from backend.app.agent.narrator import narrator_agent
 from backend.app.notifications.ses_notifier import ses_notifier
 
-def test_credentials():
-    print("=" * 60)
-    print("Quiet Check-In — AWS Credentials Diagnostic Tool")
-    print("=" * 60)
-    print(f"AWS Region:        {settings.AWS_REGION}")
-    print(f"Bedrock Model:     {settings.BEDROCK_MODEL_ID}")
-    print(f"SES Sender Email:  {settings.SES_SENDER_EMAIL}")
+def run_diagnostics():
+    print("=" * 70)
+    print("Quiet Check-In — AWS Bedrock & SES Diagnostics")
+    print("=" * 70)
+    print(f"AWS Region:             {settings.AWS_REGION}")
+    print(f"Configured Model ID:    {settings.BEDROCK_MODEL_ID}")
+    print(f"SES Sender Email:       {settings.SES_SENDER_EMAIL}")
     
     key_preview = settings.AWS_ACCESS_KEY_ID[:4] + "..." if settings.AWS_ACCESS_KEY_ID else "NOT SET"
-    print(f"AWS Access Key ID: {key_preview}")
-    print("-" * 60)
+    print(f"AWS Access Key ID:      {key_preview}")
+    print("-" * 70)
 
-    # 1. Test Bedrock
-    print("\n1. Testing Amazon Bedrock Runtime connection...")
-    bedrock_client = narrator_agent._get_client()
-    if not bedrock_client or not settings.AWS_ACCESS_KEY_ID:
-        print("  [!] AWS credentials not found in .env; system using local template fallback.")
+    # 1. Direct Amazon Bedrock Converse Verification
+    print("\n[1] Testing Amazon Bedrock Runtime Connection & Model Access...")
+    client = narrator_agent._get_client()
+    if not client or not settings.AWS_ACCESS_KEY_ID:
+        print("  [!] AWS credentials not found in .env; system is running in local fallback mode.")
     else:
-        try:
-            sample_facts = {
-                "elder_name": "Frank",
-                "anchor_name": "Morning Front Porch Activity",
-                "usual_window": "8:18 AM - 9:18 AM",
-                "support_text": "seen on 20 of 21 days"
-            }
-            msg = narrator_agent.compose_alert_message(sample_facts, "missed_anchor", "L1")
-            print(f"  [OK] Bedrock Claude 3 Haiku successfully generated message:\n       \"{msg}\"")
-        except Exception as e:
-            print(f"  [ERROR] Bedrock call failed: {e}")
-            print("  Check: (1) Did you enable model access in AWS Bedrock Console?")
-            print("         (2) Is your AWS_REGION set to where access was granted (e.g. us-east-1)?")
+        candidate_models = narrator_agent._get_candidate_models()
+        bedrock_success = False
 
-    # 2. Test SES
-    print("\n2. Testing Amazon SES client...")
+        for model_id in candidate_models:
+            print(f"  Attempting Converse with: {model_id} ...")
+            try:
+                res = client.converse(
+                    modelId=model_id,
+                    messages=[{"role": "user", "content": [{"text": "Say 'Quiet Check-In AI connected' in under 8 words."}]}],
+                    inferenceConfig={"maxTokens": 40, "temperature": 0.1}
+                )
+                output_text = res["output"]["message"]["content"][0]["text"].strip()
+                print(f"  [OK] Amazon Bedrock LIVE RESPONSE from {model_id}:")
+                print(f"       \"{output_text}\"")
+                bedrock_success = True
+                break
+            except Exception as e:
+                err_type = type(e).__name__
+                err_msg = str(e)
+                print(f"  [-] Model {model_id} failed ({err_type}): {err_msg}")
+
+        if not bedrock_success:
+            print("\n  [DIAGNOSIS & ACTION REQUIRED FOR BEDROCK]:")
+            print("  Bedrock requests could not reach live inference. Causes and solutions:")
+            print("  1. AccessDeniedException for Claude Haiku 5.5:")
+            print("     -> Open AWS Console -> Bedrock -> Model access")
+            print("     -> URL: https://console.aws.amazon.com/bedrock/home?region=" + settings.AWS_REGION + "#/modelaccess")
+            print("     -> Click 'Modify model access' and enable 'Anthropic Claude Haiku 5.5'.")
+            print("  2. ThrottlingException ('Too many tokens per day'):")
+            print("     -> Your AWS Bedrock account has hit its daily token quota.")
+            print("     -> This resets at 00:00 UTC, or you can request a quota increase in AWS Service Quotas.")
+            print("  3. Quiet Check-In Safety:")
+            print("     -> Quiet Check-In seamlessly serves safe, deterministic routine answers without dropping alerts.")
+
+    # 2. Family Q&A Chat Pipeline Test
+    print("\n[2] Testing Family Q&A Chat Pipeline (Bedrock + Deterministic Fallback)...")
+    reply, source = narrator_agent.answer_family_question_with_source(
+        circle_id=settings.DEMO_CIRCLE_ID,
+        question="Did Frank pick up his morning paper today?"
+    )
+    print(f"  Response source: [{source.upper()}]")
+    print(f"  Reply content:   \"{reply}\"")
+
+    # 3. SES Connection Test
+    print("\n[3] Testing Amazon SES (Simple Email Service)...")
     ses_client = ses_notifier._get_client()
     if not ses_client or not settings.AWS_ACCESS_KEY_ID:
-        print("  [!] SES in local mode (emails logged to memory).")
+        print("  [!] SES in local mode (emails logged to memory only).")
     else:
         try:
-            res = ses_client.get_send_quota()
+            quota = ses_client.get_send_quota()
             print(f"  [OK] SES Connection successful!")
-            print(f"       Max 24h Send Quota: {res.get('Max24HourSend')} emails")
-            print(f"       Sent in last 24h:   {res.get('SentLast24Hours')} emails")
+            print(f"       Max 24h Send Quota: {quota.get('Max24HourSend')} emails")
+            print(f"       Sent in last 24h:   {quota.get('SentLast24Hours')} emails")
         except Exception as e:
-            print(f"  [ERROR] SES API call failed: {e}")
+            print(f"  [-] SES API call failed ({type(e).__name__}): {e}")
 
-    print("\n" + "=" * 60)
+    print("\n" + "=" * 70)
 
 if __name__ == "__main__":
-    test_credentials()
+    run_diagnostics()

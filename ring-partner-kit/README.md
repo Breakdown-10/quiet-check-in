@@ -45,7 +45,8 @@ verifier = RingWebhookVerifier(secret="your_ring_webhook_secret_here")
 @app.post("/webhooks/ring")
 async def handle_ring_webhook(request: Request):
     raw_body = await request.body()
-    signature_header = request.headers.get("X-Ring-Signature")
+    # Ring standard header is X-Signature (sha256=<hex> or t=...,v1=...); also accepts X-Ring-Signature
+    signature_header = request.headers.get("X-Signature") or request.headers.get("X-Ring-Signature")
 
     if not verifier.verify(raw_body, signature_header):
         raise HTTPException(status_code=401, detail="Invalid signature")

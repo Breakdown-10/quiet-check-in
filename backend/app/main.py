@@ -109,13 +109,27 @@ app.include_router(alerts_router, prefix="/api/v1")
 app.include_router(sim_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 import os
 
-STATIC_INDEX = os.path.join(os.path.dirname(__file__), "static", "index.html")
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+STATIC_INDEX = os.path.join(STATIC_DIR, "index.html")
+STATIC_ICON = os.path.join(STATIC_DIR, "app_icon.jpg")
+
+if os.path.exists(STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/", response_class=FileResponse)
 def serve_dashboard():
+    return FileResponse(STATIC_INDEX)
+
+
+@app.get("/favicon.ico")
+@app.get("/app_icon.jpg")
+def serve_app_icon():
+    if os.path.exists(STATIC_ICON):
+        return FileResponse(STATIC_ICON)
     return FileResponse(STATIC_INDEX)
 
 

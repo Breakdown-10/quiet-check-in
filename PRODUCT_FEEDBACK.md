@@ -22,7 +22,7 @@ Below is our structured feedback across six core dimensions.
 ### Overall Rating: 8.5 / 10
 * **What Worked Exceptionally Well:**
   - **v1.1 Webhook Envelope Structure:** The separation of `meta` (`request_id`, millisecond timestamp) and `data` (`id`, `device_id`, `type`, `sub_type`, `attributes`) is clean, predictable, and simple to map to Pydantic v2 schemas.
-  - **HMAC-SHA256 Signing:** Securing event transmissions with HMAC signatures (`X-Ring-Signature`) ensures enterprise-grade transport verification.
+  - **HMAC-SHA256 Signing:** Securing event transmissions with timing-safe HMAC signatures (`X-Signature` / `X-Ring-Signature`) ensures enterprise-grade transport verification over unparsed raw bytes.
   - **Deduplication Key:** Having `meta.request_id` explicitly in the header/body eliminates race conditions and duplicate delivery issues when network retries occur.
 
 ### Key Friction Points & Actionable Recommendations:

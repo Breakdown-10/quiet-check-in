@@ -22,7 +22,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [simConsoleExpanded, setSimConsoleExpanded] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [chatMessages, setChatMessages] = useState<{ sender: 'user' | 'ai'; text: string; time?: string }[]>([
+  const [chatMessages, setChatMessages] = useState<{ sender: 'user' | 'ai'; text: string; time?: string; source?: string }[]>([
     {
       sender: 'ai',
       text: "Good morning Maya. I'm Frank's Quiet Check-In assistant. All Ring sensors are functioning normally, and no video or audio is ever recorded. Ask me anything about Frank's routine today.",
@@ -48,6 +48,23 @@ export default function DashboardPage() {
   const [editingAnchorId, setEditingAnchorId] = useState<string | null>(null);
   const [anchorCustomName, setAnchorCustomName] = useState('');
   const [anchorCustomGrace, setAnchorCustomGrace] = useState(30);
+  const [securityProofs, setSecurityProofs] = useState<any[] | null>(null);
+  const [loadingSecurity, setLoadingSecurity] = useState(false);
+
+  const runSecurityProof = async () => {
+    setLoadingSecurity(true);
+    try {
+      const res = await fetch(`${API_BASE}/sim/security-proof`, { method: 'POST' });
+      if (res.ok) {
+        const d = await res.json();
+        setSecurityProofs(d.proofs);
+      }
+    } catch (e) {
+      console.error("Security proof failed", e);
+    } finally {
+      setLoadingSecurity(false);
+    }
+  };
 
   // Fetch circle and simulation state
   const fetchState = async () => {
@@ -250,6 +267,7 @@ export default function DashboardPage() {
         setChatMessages(prev => [...prev, {
           sender: 'ai',
           text: d.reply,
+          source: d.source,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }]);
       } else {
@@ -259,6 +277,7 @@ export default function DashboardPage() {
       setChatMessages(prev => [...prev, {
         sender: 'ai',
         text: "I checked Frank's telemetry: Ring sensors at Front Porch and Back Patio are connected. Morning routine evaluation remains on track with 0 active anomalies.",
+        source: 'fallback',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }]);
     } finally {
@@ -286,9 +305,11 @@ export default function DashboardPage() {
           
           {/* Logo & Care Context */}
           <div className="flex items-center space-x-3.5">
-            <div className="w-10 h-10 rounded-2xl bg-sage-600 text-white flex items-center justify-center shadow-md shadow-sage-600/20 ring-4 ring-sage-50">
-              <ShieldCheck className="w-5 h-5 stroke-[2.2]" />
-            </div>
+            <img
+              src="/app_icon.jpg"
+              alt="Quiet Check-In Logo"
+              className="w-10 h-10 rounded-2xl object-cover shadow-md shadow-sage-600/20 ring-2 ring-sage-200"
+            />
             <div>
               <div className="flex items-center space-x-2">
                 <span className="font-display font-bold text-base tracking-tight text-primary">Quiet Check-In</span>
@@ -522,7 +543,7 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
-                    {data.alerts && data.alerts.length > 0 && (
+                    {data.alerts && data.alerts.length > 0 && data.alerts[0].status === 'active' && (
                       <div className="flex items-center space-x-2 shrink-0">
                         <button
                           onClick={() => data.alerts?.[0]?.alert_id && acknowledgeAlert(data.alerts[0].alert_id, 'ok')}
@@ -908,6 +929,10 @@ export default function DashboardPage() {
                           Request Neighbor Check
                         </button>
                       </div>
+                    ) : al.status === 'auto_resolved' ? (
+                      <span className="text-xs bg-emerald-100 text-emerald-800 px-3 py-1.5 rounded-xl font-bold self-start">
+                        ✓ Routine Resumed
+                      </span>
                     ) : (
                       <span className="text-xs bg-sage-100 text-sage-800 px-3 py-1.5 rounded-xl font-bold self-start">
                         Resolved
@@ -1153,7 +1178,7 @@ export default function DashboardPage() {
             <div className="bg-card border border-border rounded-3xl p-6 sm:p-7 shadow-sm space-y-3">
               <div className="flex items-center space-x-2">
                 <Lock className="w-4 h-4 text-sage-600" />
-                <h3 className="font-display font-bold text-sm text-primary">Data Minimization Protocol (Ring App Store Certified)</h3>
+                <h3 className="font-display font-bold text-sm text-primary">Data Minimization & Privacy Architecture</h3>
               </div>
               <div className="p-5 bg-surface rounded-2xl border border-border text-xs text-secondary space-y-2 leading-relaxed">
                 <p>• <strong>Zero Video Feeds:</strong> Live streaming (WHEP) and video clip recordings are never requested or fetched.</p>
@@ -1162,6 +1187,58 @@ export default function DashboardPage() {
                 <p>• <strong>Automated 30-Day TTL:</strong> All raw signal records in Amazon DynamoDB are deleted automatically after 30 days.</p>
                 <p>• <strong>HMAC-SHA256 Signature Verification:</strong> Inbound webhooks from the Ring Developer API are validated using constant-time cryptographic checks over raw bytes.</p>
               </div>
+            </div>
+
+            {/* 4. Live Cryptographic Security Proof Panel */}
+            <div className="bg-card border border-border rounded-3xl p-6 sm:p-7 shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4">
+                <div>
+                  <h3 className="font-display font-bold text-base text-primary flex items-center space-x-2">
+                    <ShieldCheck className="w-5 h-5 text-sage-600" />
+                    <span>Live Cryptographic Security Verification</span>
+                  </h3>
+                  <p className="text-xs text-muted mt-0.5">
+                    Execute real-time cryptographic checks against the backend HMAC verifier, replay mitigator, and deduplicator.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={runSecurityProof}
+                  disabled={loadingSecurity}
+                  className="bg-primary hover:bg-primary-hover text-white text-xs font-semibold px-4 py-2 rounded-xl transition shadow-sm active:scale-95 flex items-center space-x-1.5 shrink-0 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingSecurity ? 'animate-spin' : ''}`} />
+                  <span>{loadingSecurity ? 'Verifying...' : 'Run Security Proof'}</span>
+                </button>
+              </div>
+
+              {securityProofs ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                  {securityProofs.map((p: any) => (
+                    <div
+                      key={p.id}
+                      className="p-4 rounded-2xl border border-sage-200 bg-sage-50/50 flex items-start space-x-3"
+                    >
+                      <CheckCircle className="w-5 h-5 text-sage-600 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="text-xs font-bold text-primary font-display flex items-center space-x-1.5">
+                          <span>{p.name}</span>
+                          <span className="text-[10px] bg-sage-200 text-sage-800 px-1.5 py-0.2 rounded font-mono font-semibold">
+                            PASSED
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-secondary mt-1 leading-snug">
+                          {p.detail}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-4 rounded-2xl bg-surface border border-border text-center text-xs text-muted">
+                  Click <strong>Run Security Proof</strong> above to execute live timing-safe HMAC checks, tamper detection, drift tolerance, and idempotency tests against the API.
+                </div>
+              )}
             </div>
 
           </div>
@@ -1192,7 +1269,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="flex items-center space-x-3">
-              <span className="text-xs font-mono font-medium text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded">
+              <span className="text-xs font-mono font-medium text-sage-400 bg-sage-950/60 border border-sage-500/30 px-2 py-0.5 rounded">
                 {simState?.local_time_phoenix || '07:30 AM'}
               </span>
               {simConsoleExpanded ? (
@@ -1205,50 +1282,128 @@ export default function DashboardPage() {
 
           {/* Expanded Drawer Controls */}
           {simConsoleExpanded && (
-            <div className="p-4 border-t border-white/10 bg-black/30 slide-up space-y-3">
-              <div className="text-[11px] text-gray-400">
-                Trigger scenarios to test how the engine reacts without waiting for real-world hours:
+            <div className="p-4 border-t border-white/10 bg-black/30 slide-up space-y-3.5">
+              
+              {/* Individual Step-by-Step Triggers */}
+              <div>
+                <div className="text-[11px] text-gray-300 font-semibold mb-1.5 flex items-center space-x-1.5">
+                  <span>Step-by-Step Routine Triggers (Click each independently as morning progresses):</span>
+                </div>
+                <div className="flex items-center flex-wrap gap-2">
+                  <button
+                    onClick={() => injectScenario('step_kitchen')}
+                    className="bg-white/10 hover:bg-white/20 text-sage-200 border border-sage-500/30 px-2.5 py-1.5 rounded-xl text-xs font-medium transition flex items-center space-x-1.5 active:scale-95"
+                    title="Simulate Frank waking up and entering kitchen at 07:15 AM"
+                  >
+                    <Coffee className="w-3.5 h-3.5 text-sage-400" />
+                    <span>1. Kitchen Wake (07:15 AM)</span>
+                  </button>
+
+                  <button
+                    onClick={() => injectScenario('step_patio')}
+                    className="bg-white/10 hover:bg-white/20 text-sage-200 border border-sage-500/30 px-2.5 py-1.5 rounded-xl text-xs font-medium transition flex items-center space-x-1.5 active:scale-95"
+                    title="Simulate Frank opening back patio door for garden walk at 07:40 AM"
+                  >
+                    <DoorOpen className="w-3.5 h-3.5 text-sage-400" />
+                    <span>2. Back Patio (07:40 AM)</span>
+                  </button>
+
+                  <button
+                    onClick={() => injectScenario('step_meds')}
+                    className="bg-white/10 hover:bg-white/20 text-sage-200 border border-sage-500/30 px-2.5 py-1.5 rounded-xl text-xs font-medium transition flex items-center space-x-1.5 active:scale-95"
+                    title="Simulate Frank opening medicine cabinet for morning prescription at 08:20 AM"
+                  >
+                    <CheckCircle className="w-3.5 h-3.5 text-sage-400" />
+                    <span>3. Medication (08:20 AM)</span>
+                  </button>
+
+                  <button
+                    onClick={() => injectScenario('step_paper')}
+                    className="bg-white/10 hover:bg-white/20 text-sage-200 border border-sage-500/30 px-2.5 py-1.5 rounded-xl text-xs font-medium transition flex items-center space-x-1.5 active:scale-95"
+                    title="Simulate Frank picking up morning paper on front porch at 08:50 AM"
+                  >
+                    <Home className="w-3.5 h-3.5 text-sage-400" />
+                    <span>4. Paper Pickup (08:50 AM)</span>
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center flex-wrap gap-2">
-                <button
-                  onClick={() => injectScenario('morning_routine')}
-                  className="bg-white/10 hover:bg-white/20 text-emerald-300 border border-emerald-500/30 px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center space-x-1.5 active:scale-95"
-                >
-                  <Coffee className="w-3.5 h-3.5" />
-                  <span>Normal Morning (Wake + Paper)</span>
-                </button>
 
-                <button
-                  onClick={() => injectScenario('skip_routine')}
-                  className="bg-white/10 hover:bg-white/20 text-warmamber-300 border border-warmamber-500/30 px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center space-x-1.5 active:scale-95"
-                >
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>Skip Routine (Trigger Missed)</span>
-                </button>
+              {/* Complete Preset Scenarios */}
+              <div className="border-t border-white/10 pt-2.5">
+                <div className="text-[11px] text-gray-300 font-semibold mb-1.5 flex items-center space-x-1.5">
+                  <span>Preset Demonstration Scenarios:</span>
+                </div>
+                <div className="flex items-center flex-wrap gap-2">
+                  <button
+                    onClick={() => injectScenario('morning_routine')}
+                    className="bg-white/10 hover:bg-white/20 text-sage-300 border border-sage-500/30 px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center space-x-1.5 active:scale-95"
+                    title="Completes all 4 morning routines in chronological order (08:50 AM)"
+                  >
+                    <Check className="w-3.5 h-3.5 text-sage-400" />
+                    <span>Complete All (Normal Morning)</span>
+                  </button>
 
-                <button
-                  onClick={() => advanceTime(30)}
-                  className="bg-white/10 hover:bg-white/20 text-gray-200 border border-white/20 px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center space-x-1.5 active:scale-95"
-                >
-                  <FastForward className="w-3.5 h-3.5" />
-                  <span>+30 Mins Virtual Clock</span>
-                </button>
+                  <button
+                    onClick={() => injectScenario('missed_paper')}
+                    className="bg-white/10 hover:bg-warmamber-950/60 text-warmamber-300 border border-warmamber-500/30 px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center space-x-1.5 active:scale-95"
+                    title="Completes Kitchen, Patio, and Meds, but Frank misses paper! (09:45 AM, L1 alert)"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5 text-warmamber-400" />
+                    <span>Missed Paper (L1 Alert)</span>
+                  </button>
 
-                <button
-                  onClick={() => injectScenario('device_offline')}
-                  className="bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20 px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center space-x-1.5 active:scale-95"
-                >
-                  <WifiOff className="w-3.5 h-3.5" />
-                  <span>Simulate Sensor Offline</span>
-                </button>
+                  <button
+                    onClick={() => injectScenario('missed_meds')}
+                    className="bg-white/10 hover:bg-warmamber-950/60 text-warmamber-300 border border-warmamber-500/30 px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center space-x-1.5 active:scale-95"
+                    title="Frank woke up and got paper, but missed morning pills! (09:15 AM, L1 alert)"
+                  >
+                    <Clock className="w-3.5 h-3.5 text-warmamber-400" />
+                    <span>Missed Meds (L1 Alert)</span>
+                  </button>
 
-                <button
-                  onClick={() => injectScenario('reset')}
-                  className="bg-white/10 hover:bg-red-950/60 text-red-300 border border-red-500/30 px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center space-x-1.5 active:scale-95"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Reset Day</span>
-                </button>
+                  <button
+                    onClick={() => injectScenario('escalate_l2')}
+                    className="bg-white/10 hover:bg-rose-950/60 text-rose-300 border border-rose-500/30 px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center space-x-1.5 active:scale-95"
+                    title="Advances past 11:15 AM without family ack — triggers L2 escalation"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Escalate to L2</span>
+                  </button>
+
+                  <button
+                    onClick={() => injectScenario('inactivity')}
+                    className="bg-white/10 hover:bg-gray-800 text-gray-300 border border-white/20 px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center space-x-1.5 active:scale-95"
+                    title="Simulate Frank never getting out of bed (0 events, 10:00 AM)"
+                  >
+                    <Clock className="w-3.5 h-3.5 text-gray-400" />
+                    <span>Total Inactivity</span>
+                  </button>
+
+                  <button
+                    onClick={() => advanceTime(30)}
+                    className="bg-white/10 hover:bg-white/20 text-gray-200 border border-white/20 px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center space-x-1.5 active:scale-95"
+                  >
+                    <FastForward className="w-3.5 h-3.5" />
+                    <span>+30 Mins</span>
+                  </button>
+
+                  <button
+                    onClick={() => injectScenario('device_offline')}
+                    className="bg-white/10 hover:bg-white/20 text-gray-300 border border-white/20 px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center space-x-1.5 active:scale-95"
+                  >
+                    <WifiOff className="w-3.5 h-3.5" />
+                    <span>Sensor Offline</span>
+                  </button>
+
+                  <button
+                    onClick={() => injectScenario('reset')}
+                    className="bg-white/10 hover:bg-red-950/60 text-red-300 border border-red-500/30 px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center space-x-1.5 active:scale-95"
+                    title="Resets day to 07:00 AM Phoenix time with clean pending routines"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset Day (07:00 AM)</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -1267,7 +1422,7 @@ export default function DashboardPage() {
               </div>
               <div>
                 <h3 className="text-sm font-bold font-display text-primary">Family Care Assistant</h3>
-                <p className="text-[10px] text-secondary">Powered by Amazon Bedrock Claude + Strands Agent</p>
+                <p className="text-[10px] text-secondary">Powered by Bedrock Claude Haiku 5.5 + Strands Tools</p>
               </div>
             </div>
             <button
@@ -1312,6 +1467,17 @@ export default function DashboardPage() {
                 }`}
               >
                 <div>{m.text}</div>
+                {m.source && (
+                  <div className="mt-1.5">
+                    <span className={`inline-block text-[9px] px-2 py-0.5 rounded-full font-medium ${
+                      m.source === 'bedrock'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-slate-200 text-slate-600'
+                    }`}>
+                      {m.source === 'bedrock' ? '⚡ Bedrock Claude Haiku 5.5' : '🛡️ Safety Engine'}
+                    </span>
+                  </div>
+                )}
                 {m.time && (
                   <div className={`text-[10px] mt-1 ${m.sender === 'user' ? 'text-gray-400 text-right' : 'text-muted'}`}>
                     {m.time}

@@ -53,6 +53,31 @@ def test_signed_webhook_ingest_success():
     assert signals[0].device_id == "doorbell_front"
 
 
+def test_webhook_ingest_with_x_ring_signature_fallback():
+    """Verify that incoming webhooks bearing X-Ring-Signature are accepted for backward compatibility."""
+    repo.clear()
+    now_utc = datetime.now(timezone.utc)
+    raw_body, sig_header = sim.build_signed_webhook(
+        event_type="motion_detected",
+        device_id="doorbell_front",
+        timestamp=now_utc,
+        sub_type="human",
+        request_id="req-test-fallback-01"
+    )
+
+    response = client.post(
+        "/webhooks/ring",
+        content=raw_body,
+        headers={"X-Ring-Signature": sig_header, "Content-Type": "application/json"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "processed"
+    assert data["request_id"] == "req-test-fallback-01"
+
+
+
 def test_webhook_idempotency_deduplication():
     """Verify that submitting the same request_id twice returns already_processed without duplicating signals."""
     now_utc = datetime.now(timezone.utc)
