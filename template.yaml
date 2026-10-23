@@ -16,9 +16,11 @@ Globals:
       Variables:
         TABLE_NAME: !Ref QuietCheckInTable
         RING_WEBHOOK_SECRET: !Ref RingWebhookSecret
+        RING_HMAC_KEY: !Ref RingWebhookSecret
         BEDROCK_MODEL_ID: !Ref BedrockModelId
         BEDROCK_GUARDRAIL_ID: !Ref BedrockGuardrailId
         SES_FROM_ADDRESS: !Ref SesFromEmail
+        SES_SENDER_EMAIL: !Ref SesFromEmail
         APP_ENV: production
         LOG_LEVEL: INFO
 
@@ -27,12 +29,12 @@ Parameters:
     Type: String
     NoEcho: true
     Description: Secret key configured in Ring Developer Portal for HMAC-SHA256 signature verification.
-    Default: dev_ring_webhook_secret_key_32bytes_sample
+    Default: staging_ring_hmac_secret_key_demo_2026
 
   BedrockModelId:
     Type: String
     Description: Amazon Bedrock Model ID for AI Narrator.
-    Default: anthropic.claude-3-5-sonnet-20241022-v2:0
+    Default: us.anthropic.claude-haiku-4-5-20251001-v1:0
 
   BedrockGuardrailId:
     Type: String

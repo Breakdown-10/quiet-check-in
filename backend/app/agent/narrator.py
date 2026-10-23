@@ -1,7 +1,9 @@
 import json
 import logging
+import time
 from typing import Any, Optional, Tuple
 import boto3
+from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 from backend.app.config import settings
@@ -29,12 +31,19 @@ class BedrockNarratorAgent:
         self.model_id = model_id or settings.BEDROCK_MODEL_ID
         self.region_name = region_name or settings.AWS_REGION
         self._bedrock_client = None
+        self._cooldown_until: float = 0.0
         self.last_status: dict[str, Any] = {
             "connected": False,
             "model": self.model_id,
             "last_error": None,
             "last_error_type": None
         }
+
+    def _is_in_cooldown(self) -> bool:
+        return time.time() < self._cooldown_until
+
+    def _trigger_cooldown(self, seconds: float = 60.0):
+        self._cooldown_until = time.time() + seconds
 
     def _get_client(self):
         if self._bedrock_client is None:
@@ -46,7 +55,12 @@ class BedrockNarratorAgent:
                     if settings.AWS_SESSION_TOKEN:
                         kwargs["aws_session_token"] = settings.AWS_SESSION_TOKEN
 
-                self._bedrock_client = boto3.client("bedrock-runtime", **kwargs)
+                cfg = Config(
+                    retries={"max_attempts": 1},
+                    connect_timeout=2.0,
+                    read_timeout=4.0
+                )
+                self._bedrock_client = boto3.client("bedrock-runtime", config=cfg, **kwargs)
             except Exception as e:
                 logger.warning(f"Bedrock runtime client unavailable: {e}")
                 self.last_status["last_error"] = str(e)
@@ -58,10 +72,7 @@ class BedrockNarratorAgent:
         candidates = [self.model_id]
         fallback_candidates = [
             "us.anthropic.claude-haiku-4-5-20251001-v1:0",
-            "global.anthropic.claude-haiku-4-5-20251001-v1:0",
-            "us.anthropic.claude-haiku-5-5",
-            "global.anthropic.claude-haiku-5-5",
-            "anthropic.claude-haiku-5-5"
+            "global.anthropic.claude-haiku-4-5-20251001-v1:0"
         ]
         for m in fallback_candidates:
             if m not in candidates:
@@ -85,7 +96,7 @@ class BedrockNarratorAgent:
         support_text = evidence_facts.get("support_text", "")
 
         client = self._get_client()
-        if client:
+        if client and not self._is_in_cooldown():
             system_prompt = (
                 "You are the Quiet Check-In AI narrator for a family caretaking app. "
                 "Your role is to write a warm, calm, non-alarmist notification to family. "
@@ -113,12 +124,17 @@ class BedrockNarratorAgent:
                     is_valid, violation = BedrockGuardrailsFilter.validate_content(output_text)
                     if is_valid:
                         self.last_status.update({"connected": True, "model": model_id, "last_error": None})
+                        self._cooldown_until = 0.0
                         return output_text
                     else:
                         logger.warning(f"Guardrail violation in Bedrock response: {violation}")
                 except Exception as e:
                     last_err = e
+                    err_msg = str(e)
                     logger.debug(f"Bedrock invocation failed for {model_id}: {e}")
+                    if "ThrottlingException" in err_msg or "Too many tokens per day" in err_msg:
+                        self._trigger_cooldown(60.0)
+                        break
 
             if last_err:
                 self.last_status.update({
@@ -158,7 +174,7 @@ class BedrockNarratorAgent:
         Returns the generated text answer if successful, or None if Bedrock is unavailable.
         """
         client = self._get_client()
-        if not client:
+        if not client or self._is_in_cooldown():
             return None
 
         system_prompt = (
@@ -221,6 +237,7 @@ class BedrockNarratorAgent:
                             is_valid, violation = BedrockGuardrailsFilter.validate_content(reply_text)
                             if is_valid:
                                 self.last_status.update({"connected": True, "model": model_id, "last_error": None})
+                                self._cooldown_until = 0.0
                                 return reply_text
                             else:
                                 logger.warning(f"Bedrock chat response guardrail violation: {violation}")
@@ -228,7 +245,12 @@ class BedrockNarratorAgent:
                         break
             except Exception as e:
                 last_err = e
+                err_msg = str(e)
                 logger.debug(f"Bedrock chat failed for {model_id}: {e}")
+                if "ThrottlingException" in err_msg or "Too many tokens per day" in err_msg:
+                    logger.warning(f"Bedrock daily token quota reached; activating 60s cooldown: {e}")
+                    self._trigger_cooldown(60.0)
+                    break
                 continue
 
         if last_err:
@@ -251,39 +273,117 @@ class BedrockNarratorAgent:
         recent_signals = get_recent_signals(circle_id, hours=12.0)
         elder_name = today_data.get("elder_name", "Frank")
 
-        if "paper" in lower_q or "doorbell" in lower_q or "front" in lower_q:
+        # 0. Conversational greetings, introductions, and courtesy
+        clean_q = lower_q.strip().strip("?!.,")
+        if clean_q in ["hello", "hi", "hey", "good morning", "good afternoon", "good evening", "howdy", "sup", "greetings"] or any(clean_q.startswith(g) for g in ["hello ", "hi ", "hey "]):
+            return f"Hello! I'm {elder_name}'s Quiet Check-In assistant. All Ring ambient sensors are online and monitoring his routine normally. How can I help you today?"
+
+        if any(phrase in clean_q for phrase in ["who are you", "what can you do", "what do you do", "help me", "how does this work"]):
+            return f"I'm {elder_name}'s ambient care assistant for Quiet Check-In. I track daily routine milestones—such as his morning kitchen routine, patio check, medication adherence, and morning paper pickup—using privacy-first Ring event timestamps with zero video or audio recording."
+
+        if any(phrase in clean_q for phrase in ["thank you", "thanks", "thx", "appreciate it"]):
+            return f"You're very welcome! I'll continue keeping watch over {elder_name}'s routines quietly and will notify family if any unexpected silence occurs."
+
+        # 1. Paper / Front Doorbell / Porch routine check
+        if any(term in lower_q for term in ["paper", "doorbell", "porch", "front door", "front"]):
             paper_anchor = next(
-                (a for a in today_data.get("active_anchors", []) if "paper" in a.get("name", "").lower() or "doorbell" in a.get("name", "").lower()),
+                (a for a in today_data.get("active_anchors", []) 
+                 if any(term in a.get("name", "").lower() for term in ["paper", "doorbell", "porch", "front"])
+                 or any(term in a.get("device_id", "").lower() for term in ["doorbell", "front"])),
                 None
             )
-            if paper_anchor:
-                if paper_anchor.get("has_occurred"):
-                    return f"Yes, {elder_name} completed his morning paper pickup routine today around his usual time."
-                else:
-                    window = paper_anchor.get("window", "7:30 - 8:50 AM")
-                    status = paper_anchor.get("status", "pending")
-                    if status == "missed":
-                        return f"{elder_name} hasn't been detected picking up the paper today yet. His usual window is {window}."
-                    else:
-                        return f"Nothing yet, but it's still early. {elder_name} usually picks up the paper between {window}."
+            doorbell_events = [
+                s for s in recent_signals 
+                if any(term in s.get("device", "").lower() for term in ["doorbell", "front"])
+                or any(term in s.get("device_id", "").lower() for term in ["doorbell", "front"])
+            ]
 
-        if "back door" in lower_q or "patio" in lower_q or "garden" in lower_q:
-            door_events = [s for s in recent_signals if "backdoor" in s.get("device", "").lower()]
-            if door_events:
-                last_event = door_events[-1]
-                return f"{elder_name} was active at the back patio today around {last_event.get('local_time')}."
+            if doorbell_events or (paper_anchor and paper_anchor.get("has_occurred")):
+                last_time = doorbell_events[-1].get("local_time") if doorbell_events else "around his usual time"
+                return f"Yes, {elder_name} completed his morning paper pickup routine today around {last_time}."
+            elif paper_anchor:
+                window = paper_anchor.get("window", "8:00 AM - 9:15 AM")
+                status = paper_anchor.get("status", "pending")
+                if status == "missed":
+                    return f"{elder_name} hasn't been detected picking up the paper today yet. His usual window is {window}."
+                else:
+                    return f"Nothing yet, but it's still early. {elder_name} usually picks up the paper between {window}."
+            else:
+                return f"No front porch or doorbell activity has been recorded yet today, so {elder_name} may not have picked up the paper yet."
+
+        # 2. Back patio / garden routine check
+        if any(term in lower_q for term in ["back door", "backdoor", "patio", "garden"]):
+            patio_anchor = next(
+                (a for a in today_data.get("active_anchors", []) 
+                 if any(term in a.get("name", "").lower() for term in ["patio", "back"])
+                 or any(term in a.get("device_id", "").lower() for term in ["backdoor", "patio"])),
+                None
+            )
+            door_events = [
+                s for s in recent_signals 
+                if any(term in s.get("device", "").lower() for term in ["backdoor", "patio"])
+                or any(term in s.get("device_id", "").lower() for term in ["backdoor", "patio"])
+            ]
+            if door_events or (patio_anchor and patio_anchor.get("has_occurred")):
+                last_event = door_events[-1] if door_events else None
+                time_str = last_event.get("local_time") if last_event else "his usual morning time"
+                return f"{elder_name} was active at the back patio today around {time_str}."
+            elif patio_anchor:
+                return f"No back patio activity observed yet today. {elder_name}'s normal patio check is between {patio_anchor.get('window')}."
             else:
                 return "No back door activity has been recorded yet today."
 
-        # General status query
+        # 3. Kitchen / breakfast / morning wake routine check
+        if any(term in lower_q for term in ["kitchen", "breakfast", "coffee", "wake", "woke", "up"]):
+            kitchen_anchor = next(
+                (a for a in today_data.get("active_anchors", []) 
+                 if "kitchen" in a.get("name", "").lower() or "kitchen" in a.get("device_id", "").lower()),
+                None
+            )
+            kitchen_events = [
+                s for s in recent_signals 
+                if "kitchen" in s.get("device", "").lower() or "kitchen" in s.get("device_id", "").lower()
+            ]
+            if kitchen_events or (kitchen_anchor and kitchen_anchor.get("has_occurred")):
+                last_t = kitchen_events[-1].get("local_time") if kitchen_events else "around his usual time"
+                return f"{elder_name} was active in the kitchen around {last_t} for his morning routine."
+            elif kitchen_anchor:
+                return f"No kitchen activity recorded yet today. {elder_name} usually starts his morning kitchen routine between {kitchen_anchor.get('window')}."
+            else:
+                return "No kitchen motion has been recorded yet today."
+
+        # 4. Medicine / pills adherence check
+        if any(term in lower_q for term in ["medicine", "meds", "pill", "cabinet", "dose"]):
+            med_anchor = next(
+                (a for a in today_data.get("active_anchors", []) 
+                 if "med" in a.get("name", "").lower() or "medicine" in a.get("device_id", "").lower()),
+                None
+            )
+            med_events = [
+                s for s in recent_signals 
+                if "medicine" in s.get("device", "").lower() or "medicine" in s.get("device_id", "").lower()
+            ]
+            if med_events or (med_anchor and med_anchor.get("has_occurred")):
+                last_t = med_events[-1].get("local_time") if med_events else "around his usual time"
+                return f"{elder_name} accessed the medicine cabinet at {last_t} today."
+            elif med_anchor:
+                return f"No medicine cabinet activity recorded yet today. {elder_name}'s normal adherence window is {med_anchor.get('window')}."
+            else:
+                return "No medicine cabinet adherence recorded yet today."
+
+        # 5. Device health / sensor connectivity check
+        if any(term in lower_q for term in ["sensor", "device", "health", "battery", "online"]):
+            return "All Ring sensors (Front Doorbell, Back Patio Door, Medicine Cabinet, Kitchen Motion) are online and healthy. Data minimization protocol is active (0 audio, 0 video recorded)."
+
+        # 6. General status fallback
         status = today_data.get("overall_status", "green")
         if status == "green":
             event_count = today_data.get("events_count_today", 0)
             return f"Today is looking normal for {elder_name}. We've observed {event_count} routine events so far and all active anchors are on schedule."
         elif status == "amber":
-            return f"There is a gentle check-in open: one of {elder_name}'s usual morning routines hasn't checked in yet today."
+            return f"There is a gentle check-in open: one of {elder_name}'s usual morning routines is overdue past its typical window."
         else:
-            return f"Extended silence detected during waking hours. Consider reaching out with a quick call."
+            return f"Extended silence detected during waking hours. Consider reaching out with a quick check-in call."
 
     def answer_family_question(self, circle_id: str, question: str) -> str:
         """

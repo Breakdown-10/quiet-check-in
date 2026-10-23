@@ -330,7 +330,7 @@ export default function DashboardPage() {
             <div className="bg-surface border border-border rounded-xl px-3 py-1.5 flex items-center space-x-2 shadow-inner">
               <Clock className="w-3.5 h-3.5 text-sage-600" />
               <div className="text-xs font-medium text-primary">
-                <span className="font-semibold">{simState?.local_time_phoenix || data?.local_time || '07:30 AM'}</span>
+                <span className="font-semibold">{simState?.local_time_phoenix || data?.local_time || '07:00 AM'}</span>
                 <span className="text-[11px] text-muted ml-1 hidden sm:inline">Phoenix</span>
               </div>
               <span className="bg-sage-100 text-sage-700 text-[10px] font-bold px-1.5 py-0.5 rounded tracking-wide uppercase">
@@ -486,7 +486,7 @@ export default function DashboardPage() {
                           : 'Inactivity Notice'}
                       </span>
                       <span className="text-xs text-muted">
-                        Evaluated {data?.local_time || '07:30 AM'}
+                        Evaluated {data?.local_time || '07:00 AM'}
                       </span>
                     </div>
 
@@ -1270,7 +1270,7 @@ export default function DashboardPage() {
 
             <div className="flex items-center space-x-3">
               <span className="text-xs font-mono font-medium text-sage-400 bg-sage-950/60 border border-sage-500/30 px-2 py-0.5 rounded">
-                {simState?.local_time_phoenix || '07:30 AM'}
+                {simState?.local_time_phoenix || '07:00 AM'}
               </span>
               {simConsoleExpanded ? (
                 <ChevronDown className="w-4 h-4 text-gray-400" />
@@ -1472,9 +1472,9 @@ export default function DashboardPage() {
                     <span className={`inline-block text-[9px] px-2 py-0.5 rounded-full font-medium ${
                       m.source === 'bedrock'
                         ? 'bg-blue-100 text-blue-700'
-                        : 'bg-slate-200 text-slate-600'
+                        : 'bg-slate-100 text-slate-700 border border-slate-200'
                     }`}>
-                      {m.source === 'bedrock' ? '⚡ Bedrock Claude Haiku' : '🛡️ Safety Engine'}
+                      {m.source === 'bedrock' ? '⚡ Bedrock Claude Haiku' : '🛡️ Safety Engine (Grounded)'}
                     </span>
                   </div>
                 )}

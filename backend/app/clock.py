@@ -23,9 +23,9 @@ class VirtualClock:
 
     def __init__(self, initial_time: datetime | None = None):
         if initial_time is None:
-            # Default to 07:30 AM Phoenix time today (14:30 UTC) for demo start
+            # Default to 07:00 AM Phoenix time today (14:00 UTC) for demo start
             today = datetime.now(timezone.utc).date()
-            self._current_time = datetime(today.year, today.month, today.day, 14, 30, tzinfo=timezone.utc)
+            self._current_time = datetime(today.year, today.month, today.day, 14, 0, tzinfo=timezone.utc)
         else:
             if initial_time.tzinfo is None:
                 self._current_time = initial_time.replace(tzinfo=timezone.utc)

@@ -1,3 +1,21 @@
+import sys
+import os
+import types
+
+# Ensure backend package can be resolved when running either from project root
+# or packaged directly at the Lambda task root (/var/task).
+_CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+_BACKEND_DIR = os.path.dirname(_CURRENT_DIR)
+_ROOT_DIR = os.path.dirname(_BACKEND_DIR)
+
+if _ROOT_DIR not in sys.path:
+    sys.path.insert(0, _ROOT_DIR)
+
+if "backend" not in sys.modules:
+    backend_pkg = types.ModuleType("backend")
+    backend_pkg.__path__ = [_BACKEND_DIR]
+    sys.modules["backend"] = backend_pkg
+
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI
@@ -138,10 +156,37 @@ def healthz():
     return {"status": "ok", "service": settings.APP_NAME, "mode": "SIM"}
 
 
-# AWS Lambda entrypoint for SAM deployment
+# AWS Lambda entrypoint for SAM deployment & EventBridge scheduled crons
 try:
     from mangum import Mangum
-    handler = Mangum(app)
+    _mangum_handler = Mangum(app)
+
+    def handler(event, context):
+        # Support EventBridge Scheduled Cron Events (e.g. 5-min RoutineEvaluator)
+        if isinstance(event, dict) and (event.get("source") == "aws.events" or event.get("detail-type") == "Scheduled Event"):
+            from backend.app.engine.evaluator import evaluate_circle_status
+            from backend.app.engine.escalation import EscalationManager
+
+            circle_id = settings.DEMO_CIRCLE_ID
+            now_utc = global_clock.now_utc()
+            result = evaluate_circle_status(circle_id, repo, now_utc)
+
+            mgr = EscalationManager(repo)
+            for obs in result.observations:
+                if not obs.suppressed:
+                    mgr.process_observation(circle_id, obs, now_utc)
+
+            return {
+                "statusCode": 200,
+                "status": "evaluated",
+                "circle_id": circle_id,
+                "overall_status": result.overall_status,
+                "observations_count": len(result.observations)
+            }
+
+        # Otherwise dispatch ASGI HTTP request through Mangum
+        return _mangum_handler(event, context)
+
 except ImportError:
     def handler(event, context):
         return {"statusCode": 500, "body": "Mangum not installed"}

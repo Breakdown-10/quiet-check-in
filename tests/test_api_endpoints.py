@@ -19,7 +19,7 @@ def test_full_api_workflow_end_to_end():
     assert "Quiet Check-In" in res_root.text
     assert "text/html" in res_root.headers.get("content-type", "")
 
-    # 2. Reset simulator to 07:30 AM with fresh seeded baseline
+    # 2. Reset simulator to 07:00 AM with fresh seeded baseline
     res_reset = client.post("/sim/inject", json={"scenario": "reset"})
     assert res_reset.status_code == 200
     assert res_reset.json()["status"] == "reset_complete"
@@ -33,7 +33,7 @@ def test_full_api_workflow_end_to_end():
     assert paper_anchor is not None
     assert paper_anchor["reliability_pct"] >= 70
 
-    # 4. Check today status at 07:30 AM (pending paper, overall green)
+    # 4. Check today status at 07:00 AM (pending paper, overall green)
     res_today = client.get(f"/circles/{circle_id}/today")
     assert res_today.status_code == 200
     data_today = res_today.json()

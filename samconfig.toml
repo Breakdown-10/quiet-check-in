@@ -1,0 +1,26 @@
+version = 0.1
+
+[default]
+[default.global.parameters]
+stack_name = "quiet-checkin-prod"
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.validate.parameters]
+lint = true
+
+[default.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+stack_name = "quiet-checkin-prod"
+s3_prefix = "quiet-checkin-prod"
+region = "us-east-1"
+parameter_overrides = [
+    "RingWebhookSecret=\"staging_ring_hmac_secret_key_demo_2026\"",
+    "BedrockModelId=\"us.anthropic.claude-haiku-4-5-20251001-v1:0\"",
+    "BedrockGuardrailId=\"\"",
+    "SesFromEmail=\"iamtahakhan10@gmail.com\""
+]
