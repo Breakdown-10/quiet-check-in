@@ -25,6 +25,7 @@ dist/
 
 # SAM
 .aws-sam/
+packaged.yaml
 
 # IDE
 .idea/

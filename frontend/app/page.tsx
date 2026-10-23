@@ -305,7 +305,7 @@ export default function DashboardPage() {
   const elderName = data?.elder_name || profileForm.elder_name || 'Frank';
   const elderAge = data?.age !== undefined ? data.age : profileForm.age || 78;
   const elderCity = data?.city || profileForm.city || 'Phoenix, AZ';
-  const localTime = simState?.local_time_phoenix || data?.local_time || '8:15 AM';
+  const localTime = simState?.local_time_phoenix || data?.local_time || '07:00 AM';
   const activeAlerts = data?.alerts || [];
   const alertsCount = activeAlerts.filter((a: any) => a.status === 'active').length;
   const elderInitials = elderName.length >= 2 ? elderName.substring(0, 2).toUpperCase() : 'FR';

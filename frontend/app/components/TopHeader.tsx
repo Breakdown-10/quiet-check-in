@@ -20,7 +20,7 @@ export function TopHeader({
   elderName = 'Frank',
   elderAge = 78,
   elderCity = 'Phoenix, AZ',
-  localTime = '8:15 AM',
+  localTime = '07:00 AM',
   isSim = true,
   activeTab,
   onSelectTab,
