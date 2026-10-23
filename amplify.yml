@@ -4,11 +4,13 @@ frontend:
     preBuild:
       commands:
         - nvm use 20
-        - cd frontend && npm ci
+        - if [ -n "$AWS_SRC_DIR" ]; then cd "$AWS_SRC_DIR/frontend"; elif [ -d "frontend" ]; then cd frontend; fi
+        - npm ci
     build:
       commands:
         - nvm use 20
-        - cd frontend && npm run build
+        - if [ -n "$AWS_SRC_DIR" ]; then cd "$AWS_SRC_DIR/frontend"; elif [ -d "frontend" ]; then cd frontend; fi
+        - npm run build
   artifacts:
     baseDirectory: frontend/out
     files:
